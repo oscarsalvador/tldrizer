@@ -12,6 +12,7 @@ x-common_config: &common_config
             capabilities: [gpu]
 
 services:
+  # docker run --rm -ti 
   tldrizer:
     <<: *common_config
     build: 
@@ -25,3 +26,5 @@ services:
       - ./cache:/root/.cache/huggingface/hub/
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /tmp/tldrizer:/tmp/tldrizer
+    # entrypoint: bash -c "python /tldrizer/main.py"
+    working_dir: /tldrizer

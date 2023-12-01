@@ -19,6 +19,31 @@ class AppGUI(ThemedTk):
     self.title("tldrizer")
     self.geometry(geometry)
 
+    self.sockets_timestamp = timestamp
+    self.url = tk.StringVar()
+    self.search = tk.StringVar()
+    self.search_results = []
+    self.search_current_index = ""
+    self.capt_text = ""
+    self.capt_segments = ""
+    self.summ_text = ""
+    self.video_path = ""
+    self.models_dir="/tldrizer/models/"
+    self.current_tasks = 0
+    self.done_tasks = 0
+
+
+    self.title_frame = ttk.Frame(self)
+    self.title_frame.pack(fill=tk.X, padx=5, pady=5)
+    self.style = ttk.Style()
+    self.style.configure("Title.TLabel", font=("Arial", 12, "bold"))
+    self.title = ttk.Label(self.title_frame, text="[Untitled]", style="Title.TLabel", wraplength=1300)
+    self.title.pack(side=tk.LEFT)
+    self.video_len = ttk.Label(self.title_frame, text="00:00:00", style="Title.TLabel")
+    self.video_len.pack(side=tk.RIGHT)
+
+    
+
 
 
 if __name__ == '__main__':
