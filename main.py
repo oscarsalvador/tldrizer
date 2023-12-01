@@ -42,7 +42,27 @@ class AppGUI(ThemedTk):
     self.video_len = ttk.Label(self.title_frame, text="00:00:00", style="Title.TLabel")
     self.video_len.pack(side=tk.RIGHT)
 
-    
+    self.l_text = tk.Text(self, height=30, width=60, wrap='word')
+    self.l_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+    self.l_scroll = ttk.Scrollbar(self, orient=tk.VERTICAL)
+    self.l_scroll.pack(side=tk.LEFT, fill="y", pady=5)
+    # self.l_text.config(yscrollcommand=self.l_scroll.set)
+    self.l_text['yscrollcommand'] = self.l_scroll.set
+    self.l_scroll['command'] = self.l_text.yview
+
+
+    self.right_frame = ttk.Frame(self)
+    self.right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    self.r_text_frame = ttk.Frame(self.right_frame)
+    self.r_text_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    self.r_text = tk.Text(self.r_text_frame, height=30, width=40, wrap='word')
+    self.r_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+    self.r_scroll = ttk.Scrollbar(self.r_text_frame, orient=tk.VERTICAL)
+    self.r_scroll.pack(side=tk.RIGHT, fill=tk.Y, padx=(0,5), pady=5)
+    self.r_text['yscrollcommand'] = self.r_scroll.set
+    self.r_scroll['command'] = self.r_text.yview
 
 
 
