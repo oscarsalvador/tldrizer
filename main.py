@@ -64,6 +64,26 @@ class AppGUI(ThemedTk):
     self.r_text['yscrollcommand'] = self.r_scroll.set
     self.r_scroll['command'] = self.r_text.yview
 
+    self.search_frame = ttk.Frame(self.right_frame)
+    self.search_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5)
+
+    self.search_label = ttk.Label(self.search_frame, text="Find in transcription: ")
+    self.search_label.pack(side=tk.LEFT)
+
+    self.search_text = ttk.Entry(self.search_frame, justify="left", textvariable=self.search)
+    self.search_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
+    self.search_text.bind('<KeyRelease>', lambda event: (self.clear_search(self)))
+    
+    self.n_search_button = ttk.Button(self.search_frame, text="Next", 
+      command=lambda: self.search_l_text())
+    self.n_search_button.pack(side=tk.RIGHT)
+    self.bind('<Control-End>', lambda event:   self.n_search_button.invoke())
+
+    self.p_search_button = ttk.Button(self.search_frame, text="Prev", 
+      command=lambda: self.search_l_text_prev())
+    self.p_search_button.pack(side=tk.RIGHT, padx=5)
+    self.bind('<Control-Home>', lambda event:   self.p_search_button.invoke())  
+
 
 
 if __name__ == '__main__':
