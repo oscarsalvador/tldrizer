@@ -36,3 +36,17 @@ def download(gui):
     gui.clear()
     gui.title.config(text="Error, bad URL")
     return False
+
+def transcribe(gui):
+  print("\ntranscribe")
+
+  model = whisper.load_model("base", download_root=gui.models_dir, device="cuda")
+  gui.update_progressbar(2)
+
+  # model = whisper.load_model("base", device="cuda")
+  transcript = model.transcribe(gui.video_path + ".m4a")
+  gui.update_progressbar(4)
+
+  gui.capt_text = transcript["text"]
+  gui.capt_segments = transcript["segments"]
+  gui.fill_l_text()
