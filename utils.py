@@ -129,3 +129,39 @@ def summarize(gui):
 
   gui.summ_text = result['output_text']
   gui.fill_r_text()
+
+  
+
+
+
+
+class Worker(Thread):
+  def __init__(self, gui, tasks):
+    super().__init__()
+    self.gui = gui
+    self.tasks = tasks
+
+  def run(self):  
+    print("Worker: " + self.tasks)
+
+    self.gui.done_tasks = 0
+    self.gui.current_tasks = 0
+    self.gui.progress.config(value=0)
+    if "dl" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 3
+    if "capt" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 6
+    if "summ" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 14
+
+    if "dl" in self.tasks: 
+      if not download(self.gui): return
+    if "capt" in self.tasks: transcribe(self.gui)
+    if "summ" in self.tasks: summarize(self.gui)
+
+
+class VideoPlayer(Thread):
+  def __init__(self, gui):
+    super().__init__()
+    self.gui = gui
+
+  def run(self):  
+    command = "mpv --input-ipc-server=/tmp/mpvsocket " + self.gui.url.get()
+    subprocess.run(command, shell=True)
