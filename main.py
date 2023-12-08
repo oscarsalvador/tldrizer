@@ -208,8 +208,14 @@ class AppGUI(ThemedTk):
       '", "absolute"] }\' | nc -q 0 -U "/tmp/tldrizer/mpvsocket' + self.sockets_timestamp + '"', shell=True)
 
 
-if __name__ == '__main__':
-  args = vars(parser.parse_args())
+  def update_progressbar(self, increase):
+    print("\nupdate_progressbar()")
+    print("self.current_tasks: ", self.current_tasks)
 
-  example = AppGUI("clearlooks", "1400x800", args["sockets_timestamp"])
-  example.mainloop()
+    print("self.done_tasks: ", self.done_tasks)
+    print("increase: ", increase)
+    
+    self.done_tasks = self.done_tasks + increase
+    print("self.done_tasks: ", self.done_tasks)
+
+    self.progress.config(value=int(self.done_tasks / self.current_tasks * 100))
