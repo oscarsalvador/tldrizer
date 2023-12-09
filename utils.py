@@ -1,281 +1,167 @@
-# import os
+from threading import Thread
+from yt_dlp import YoutubeDL
+from langchain.chains import MapReduceDocumentsChain, LLMChain, ReduceDocumentsChain, StuffDocumentsChain
+from langchain.llms import CTransformers
+from langchain.prompts import PromptTemplate
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+# from langchain.document_loaders import (TextLoader)
+from langchain.docstore.document import Document
+from ctransformers import AutoModelForCausalLM
+import whisper
 import tkinter as tk
-from tkinter import ttk
-from ttkthemes import ThemedTk, THEMES
-from ttkwidgets import ScaleEntry
-from ttkwidgets.autocomplete import AutocompleteCombobox
-# from PIL import Image
-from datetime import timedelta
+import os
 import subprocess
-import argparse
-
-from utils import *
-
-
-class AppGUI(ThemedTk):
-  def __init__(self, theme, geometry, timestamp):
-    ThemedTk.__init__(self, fonts=True, themebg=True)
-    self.set_theme(theme)
-    self.title("tldrizer")
-    self.geometry(geometry)
-
-
-    self.sockets_timestamp = timestamp
-    self.url = tk.StringVar()
-    self.search = tk.StringVar()
-    self.search_results = []
-    self.search_current_index = ""
-    self.capt_text = ""
-    self.capt_segments = ""
-    self.summ_text = ""
-    self.video_path = ""
-    self.models_dir="/tldrizer/models/"
-    self.current_tasks = 0
-    self.done_tasks = 0
-
-
-    self.title_frame = ttk.Frame(self)
-    self.title_frame.pack(fill=tk.X, padx=5, pady=5)
-    self.style = ttk.Style()
-    self.style.configure("Title.TLabel", font=("Arial", 12, "bold"))
-    self.title = ttk.Label(self.title_frame, text="[Untitled]", style="Title.TLabel", wraplength=1300)
-    self.title.pack(side=tk.LEFT)
-    self.video_len = ttk.Label(self.title_frame, text="00:00:00", style="Title.TLabel")
-    self.video_len.pack(side=tk.RIGHT)
-
-    self.top_text = ttk.Entry(self, justify="left", textvariable=self.url)
-    self.top_text.pack(fill="x", padx=5, pady=5)
-
-
-    self.bar_frame = ttk.Frame(self)
-    self.bar_frame.pack(fill=tk.X)
-
-    self.button_frame = ttk.Frame(self.bar_frame)
-    self.button_frame.pack(side=tk.LEFT, fill="x", expand=True, padx=5)
-
-    self.clear_button = ttk.Button(self.button_frame, text="Clear", 
-      command=lambda: self.clear())
-    self.clear_button.pack(side=tk.LEFT)
-
-    self.clear_button = ttk.Button(self.button_frame, text="Summarize text",
-      command=lambda: (
-        self.clear(True),
-        self.summarize_left()
-
-      ))
-    self.clear_button.pack(side=tk.LEFT, padx=5)
-    
-    self.mpv_button = ttk.Button(self.button_frame, text="Open video",
-      command=lambda: (
-        print("open video: "+ self.sockets_timestamp),
-        subprocess.run('echo "mpv ' + self.url.get() + 
-          ' --input-ipc-server=/tmp/tldrizer/mpvsocket' + self.sockets_timestamp + 
-          '" | nc -q 0 -U "/tmp/tldrizer/tldrizersocket' + self.sockets_timestamp + '"', shell=True)
-        # VideoPlayer(self).start()
-      ))
-    self.mpv_button.pack(side=tk.LEFT)
-
-    self.all_button = ttk.Button(self.button_frame, text="DL, transcribe & summarize",
-      command=lambda: (
-        print("\nDL, transcribe & summarize"),
-        Worker(self, "dl capt summ").start()
-      ))
-    self.all_button.pack(side=tk.LEFT, padx=5)
-
-    self.dl_trns_button = ttk.Button(self.button_frame, text="DL & transcribe", 
-      command=lambda: (
-        print("\nDL & transcribe"),
-        Worker(self, "dl capt").start()
-    ))
-    self.dl_trns_button.pack(side=tk.LEFT)
-
-    self.summarize_button = ttk.Button(self.button_frame, text="Summarize video",
-      command=lambda: (
-        print("\nSummarize"),
-        Worker(self, "summ").start()
-    ))
-    self.summarize_button.pack(side=tk.LEFT, padx=5)
-
-    self.progress_frame = ttk.Frame(self.bar_frame)
-    self.progress_frame.pack(side=tk.RIGHT)
-
-    self.progress = ttk.Progressbar(self.progress_frame, 
-      maximum=100, 
-      value=0, 
-      length=300,
-      orient="horizontal",
-      mode="determinate")
-    self.progress.pack(side=tk.RIGHT, expand=True, padx=5, ipady=2)
-    # self.progress.start()
-
-
-    self.l_text = tk.Text(self, height=30, width=60, wrap='word')
-    self.l_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-    self.l_scroll = ttk.Scrollbar(self, orient=tk.VERTICAL)
-    self.l_scroll.pack(side=tk.LEFT, fill="y", pady=5)
-    # self.l_text.config(yscrollcommand=self.l_scroll.set)
-    self.l_text['yscrollcommand'] = self.l_scroll.set
-    self.l_scroll['command'] = self.l_text.yview
-
-
-    self.right_frame = ttk.Frame(self)
-    self.right_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-    self.r_text_frame = ttk.Frame(self.right_frame)
-    self.r_text_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-    self.r_text = tk.Text(self.r_text_frame, height=30, width=40, wrap='word')
-    self.r_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
-    self.r_scroll = ttk.Scrollbar(self.r_text_frame, orient=tk.VERTICAL)
-    self.r_scroll.pack(side=tk.RIGHT, fill=tk.Y, padx=(0,5), pady=5)
-    self.r_text['yscrollcommand'] = self.r_scroll.set
-    self.r_scroll['command'] = self.r_text.yview
-
-
-    self.search_frame = ttk.Frame(self.right_frame)
-    self.search_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5)
-
-    self.search_label = ttk.Label(self.search_frame, text="Find in transcription: ")
-    self.search_label.pack(side=tk.LEFT)
-
-    self.search_text = ttk.Entry(self.search_frame, justify="left", textvariable=self.search)
-    self.search_text.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=5, pady=5)
-    self.search_text.bind('<KeyRelease>', lambda event: (self.clear_search(self)))
-    
-    self.n_search_button = ttk.Button(self.search_frame, text="Next", 
-      command=lambda: self.search_l_text())
-    self.n_search_button.pack(side=tk.RIGHT)
-    self.bind('<Control-End>', lambda event:   self.n_search_button.invoke())
-
-    self.p_search_button = ttk.Button(self.search_frame, text="Prev", 
-      command=lambda: self.search_l_text_prev())
-    self.p_search_button.pack(side=tk.RIGHT, padx=5)
-    self.bind('<Control-Home>', lambda event:   self.p_search_button.invoke())  
-    
+import time
+import json
 
 
 
-  def clear(self, skip_l_text=False):
-    self.title.config(text="[Untitled]")
-    self.video_len.config(text="00:00:00")
-    self.top_text.delete(0, tk.END)
-    if not skip_l_text: 
-      self.l_text.delete("1.0", tk.END)
-    self.r_text.delete("1.0", tk.END)
-    # self.progress.config(value=0)
-    print("progressbar: " + str(self.progress.cget("value")))
-    self.progress.config(value=0)
-    self.current_tasks = 0
-    self.done_tasks = 0
-    self.search_text.delete(0, tk.END)
-    
+def download(gui):
+  print("\ndownload")
+  gui.video_path = "/tmp/" + str(int(time.time()))
 
-  def fill_l_text(self):
-    self.l_text.delete("1.0", tk.END)
+  options = {
+    "format": "bestaudio",
+    "outtmpl": gui.video_path ,
+    'postprocessors': [{
+      'key': 'FFmpegExtractAudio',
+      'preferredcodec': 'm4a',
+    }],
+  }
 
-    # last tstamp without decimals
-    has_hours = True
-    last_timestamp = str(timedelta(seconds=self.capt_segments[-1]["start"])).split(".")[0]
-    if last_timestamp.split(":")[0] == "0" :
-      has_hours = False
-
-    for caption in self.capt_segments:
-      button = tk.Button(self.l_text, borderwidth=0, highlightthickness=0, highlightbackground='white',
-        text= str(timedelta(seconds=caption["start"])).split(".")[0] 
-          if has_hours else str(timedelta(seconds=caption["start"])).split(".")[0][2:],
-        command=lambda start=caption["start"]: # pass as arg so that it has it later, instead of being overwritten
-          # print(start)
-          self.seek_timestamp(start)
-      )
-      self.l_text.window_create(tk.END, window=button)
-      self.l_text.insert(tk.END,  f"{caption['text']}\n")
-      
-
-  def summarize_left(self):
-    self.capt_text = self.l_text.get("1.0", tk.END)
-    Worker(self, "summ").start()
-    
-
-  def fill_r_text(self):
-    self.r_text.delete("1.0", tk.END)
-    text = self.summ_text[1:] if self.summ_text[0] == " " else self.summ_text
-    self.r_text.insert(tk.END, text)
+  try:
+    with YoutubeDL(options) as ytdl:
+      info = ytdl.extract_info(gui.url.get(), download=False)
+      gui.title.config(text=info.get("title", None))
+      gui.video_len.config(text= time.strftime("%H:%M:%S", time.gmtime(info.get("duration", None))))
+      gui.update_progressbar(1)
 
 
-  def seek_timestamp(self, timestamp):
-    print("\nseek_timestamp()")
-    subprocess.run('echo \'{ "command": ["seek", "' + str(timestamp) + 
-      '", "absolute"] }\' | nc -q 0 -U "/tmp/tldrizer/mpvsocket' + self.sockets_timestamp + '"', shell=True)
-
-
-  def update_progressbar(self, increase):
-    print("\nupdate_progressbar()")
-    print("self.current_tasks: ", self.current_tasks)
-
-    print("self.done_tasks: ", self.done_tasks)
-    print("increase: ", increase)
-    
-    self.done_tasks = self.done_tasks + increase
-    print("self.done_tasks: ", self.done_tasks)
-
-    self.progress.config(value=int(self.done_tasks / self.current_tasks * 100))
-
-
-  def search_l_text(self):
-    print("\nsearch_l_text()")
-    pattern = self.search_text.get()
-
-    if len(self.search_results) == 0:
-      search_result = self.l_text.search(pattern, "1.0", tk.END)
-    else:
-      search_result = self.l_text.search(pattern, self.search_results[-1], tk.END)
-
-    if search_result == "": return
-    self.search_results.append(search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) + len(pattern)))
-
-    lastpos = search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) + len(pattern))
-    self.l_text.tag_remove(tk.SEL, "1.0", "end")
-    self.l_text.tag_add(tk.SEL, search_result, lastpos)
-    self.l_text.see(search_result)
-
-  def search_l_text_prev(self):
-    print("\nsearch_l_text_next()")
-
-    if len(self.search_results) > 1:
-      pattern = self.search_text.get()
-      search_result = self.search_results[-2]
-      firstpos = search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) - len(pattern))
-
-      self.l_text.tag_remove(tk.SEL, "1.0", "end")
-      self.l_text.tag_add(tk.SEL, firstpos, search_result)
-
-      self.l_text.see(search_result)
-      self.search_results.pop()
-
-  def clear_search(event, self):
-    print("\clear_search()")
-    
-    self.search_current_index = ""
-    self.search_results = []
-
-
-    
+      result = ytdl.download([gui.url.get()])
+      gui.update_progressbar(2)
+      return True
+  except Exception as e:
+    print("Error in download: ", e)
+    gui.clear()
+    gui.title.config(text="Error, bad URL")
+    return False
 
 
 
-if __name__ == '__main__':
-  parser = argparse.ArgumentParser(description="Set of scripts to transcribe and summarize videos")
-  parser.add_argument("--sockets_timestamp", required=True,
-    help="Unix timestamp of start.sh launch, to append to socket names (for multiple instance support)"
+
+def transcribe(gui):
+  print("\ntranscribe")
+
+  model = whisper.load_model("base", download_root=gui.models_dir, device="cuda")
+  gui.update_progressbar(2)
+
+  # model = whisper.load_model("base", device="cuda")
+  transcript = model.transcribe(gui.video_path + ".m4a")
+  gui.update_progressbar(4)
+
+  gui.capt_text = transcript["text"]
+  gui.capt_segments = transcript["segments"]
+  gui.fill_l_text()
+
+
+def summarize(gui):
+  print("\nsummarize")
+  # loader = TextLoader(gui.capt_text)
+  # docs = loader.load()
+  docs = [Document(page_content=gui.capt_text)]
+
+  config = {'max_new_tokens': 4096, 'temperature': 0.7, 'context_length': 4096, 'gpu_layers': 50}
+  
+  llm = CTransformers(model="TheBloke/Mistral-7B-Instruct-v0.1-GGUF",
+    model_file="mistral-7b-instruct-v0.1.Q4_K_M.gguf",
+    config=config,
+    threads=os.cpu_count(),
+    device=0
   )
-  args = vars(parser.parse_args())
 
-  model_dir="/tldrizer/models"
-  os.makedirs(model_dir, exist_ok=True)
+  gui.update_progressbar(4)
 
-  example = AppGUI("clearlooks", "1400x800", args["sockets_timestamp"])
-  example.mainloop()
+  map_template = """<s>[INST] The following is a part of a transcript:
+  {docs}
+  Based on this, please identify the main points.
+  Answer:  [/INST] </s>"""
+  map_prompt = PromptTemplate.from_template(map_template)
+  map_chain = LLMChain(llm=llm, prompt=map_prompt)
 
-  subprocess.run('echo "kill \$THIS_PID" | nc -q 0 -U "/tmp/tldrizer/tldrizersocket' + 
-    args["sockets_timestamp"] + '"', shell=True)
+  reduce_template = """<s>[INST] The following is set of summaries from the transcript:
+  {doc_summaries}
+  Take these and distill it into a final, consolidated summary of the main points.
+  Construct it as a well organized summary of the main points and should be between 3 and 5 paragraphs.
+  Answer:  [/INST] </s>"""
+  reduce_prompt = PromptTemplate.from_template(reduce_template)
+  reduce_chain = LLMChain(llm=llm, prompt=reduce_prompt)
 
+  combine_documents_chain = StuffDocumentsChain(
+    llm_chain=reduce_chain, document_variable_name="doc_summaries"
+  )
+
+  reduce_documents_chain = ReduceDocumentsChain(
+    combine_documents_chain=combine_documents_chain,
+    collapse_documents_chain=combine_documents_chain,
+    token_max=4000,
+  )
+
+  map_reduce_chain = MapReduceDocumentsChain(
+    llm_chain=map_chain,
+    reduce_documents_chain=reduce_documents_chain,
+    document_variable_name="docs",
+    return_intermediate_steps=True,
+  )
+
+
+  text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=4000, chunk_overlap=0
+  )
+  split_docs = text_splitter.split_documents(docs)
+
+  gui.update_progressbar(2)
+
+  start_time = time.time()
+  result = map_reduce_chain.__call__(split_docs, return_only_outputs=True)
+  gui.update_progressbar(8)
+
+  print(f"Time taken: {time.time() - start_time} seconds")
+
+  gui.summ_text = result['output_text']
+  gui.fill_r_text()
+
+  
+
+
+
+
+class Worker(Thread):
+  def __init__(self, gui, tasks):
+    super().__init__()
+    self.gui = gui
+    self.tasks = tasks
+
+  def run(self):  
+    print("Worker: " + self.tasks)
+
+    self.gui.done_tasks = 0
+    self.gui.current_tasks = 0
+    self.gui.progress.config(value=0)
+    if "dl" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 3
+    if "capt" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 6
+    if "summ" in self.tasks: self.gui.current_tasks = self.gui.current_tasks + 14
+
+    if "dl" in self.tasks: 
+      if not download(self.gui): return
+    if "capt" in self.tasks: transcribe(self.gui)
+    if "summ" in self.tasks: summarize(self.gui)
+
+
+class VideoPlayer(Thread):
+  def __init__(self, gui):
+    super().__init__()
+    self.gui = gui
+
+  def run(self):  
+    command = "mpv --input-ipc-server=/tmp/mpvsocket " + self.gui.url.get()
+    subprocess.run(command, shell=True)

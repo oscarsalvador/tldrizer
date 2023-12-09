@@ -219,3 +219,63 @@ class AppGUI(ThemedTk):
     print("self.done_tasks: ", self.done_tasks)
 
     self.progress.config(value=int(self.done_tasks / self.current_tasks * 100))
+
+
+  def search_l_text(self):
+    print("\nsearch_l_text()")
+    pattern = self.search_text.get()
+
+    if len(self.search_results) == 0:
+      search_result = self.l_text.search(pattern, "1.0", tk.END)
+    else:
+      search_result = self.l_text.search(pattern, self.search_results[-1], tk.END)
+
+    if search_result == "": return
+    self.search_results.append(search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) + len(pattern)))
+
+    lastpos = search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) + len(pattern))
+    self.l_text.tag_remove(tk.SEL, "1.0", "end")
+    self.l_text.tag_add(tk.SEL, search_result, lastpos)
+    self.l_text.see(search_result)
+
+  def search_l_text_prev(self):
+    print("\nsearch_l_text_next()")
+
+    if len(self.search_results) > 1:
+      pattern = self.search_text.get()
+      search_result = self.search_results[-2]
+      firstpos = search_result.split(".")[0] + "." + str(int(search_result.split(".")[1]) - len(pattern))
+
+      self.l_text.tag_remove(tk.SEL, "1.0", "end")
+      self.l_text.tag_add(tk.SEL, firstpos, search_result)
+
+      self.l_text.see(search_result)
+      self.search_results.pop()
+
+  def clear_search(event, self):
+    print("\clear_search()")
+    
+    self.search_current_index = ""
+    self.search_results = []
+
+
+    
+
+
+
+if __name__ == '__main__':
+  parser = argparse.ArgumentParser(description="Set of scripts to transcribe and summarize videos")
+  parser.add_argument("--sockets_timestamp", required=True,
+    help="Unix timestamp of start.sh launch, to append to socket names (for multiple instance support)"
+  )
+  args = vars(parser.parse_args())
+
+  model_dir="/tldrizer/models"
+  os.makedirs(model_dir, exist_ok=True)
+
+  example = AppGUI("clearlooks", "1400x800", args["sockets_timestamp"])
+  example.mainloop()
+
+  subprocess.run('echo "kill \$THIS_PID" | nc -q 0 -U "/tmp/tldrizer/tldrizersocket' + 
+    args["sockets_timestamp"] + '"', shell=True)
+
